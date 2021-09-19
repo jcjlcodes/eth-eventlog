@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package events;
+
+option go_package = "proto/events";
+
+// type Event struct {
+// 	Address common.Address
+// 	Topics  []common.Hash
+// 	Data    []byte
+
+// 	BlockNumber uint64
+// 	BlockHash   common.Hash
+// 	Index       uint64 // index of log in block
+
+// 	TxHash  common.Hash
+// 	TxIndex uint64 // index of tx in block
+// 	TxData  []byte
+// 	TxValue *big.Int
+// 	TxFrom  common.Address
+// 	TxGas   uint64
+// }
+message Event {
+    bytes address = 1;
+    repeated bytes topics = 2;
+    bytes data = 3;
+
+    uint64 block_number = 4;
+    bytes block_hash = 5;
+    uint64 index = 6;
+
+    bytes tx_hash = 7;
+    uint64 tx_index = 8;
+    bytes tx_data = 9;
+    string tx_value = 10; // decimal, or hex with 0x prefix
+    bytes tx_from = 11;
+    uint64 tx_gas = 12;
+}
+
+// type Block struct {
+// 	Number uint64
+// 	Hash   common.Hash
+// 	Events []Event
+// }
+message Block {
+    uint64 number = 1;
+    bytes hash = 2;
+    repeated Event events = 3;
+}
+
+message BlockSlice {
+    uint64 start = 1;
+    uint64 end = 2;
+    uint64 distance_from_head = 3;
+    repeated Block blocks = 4;
+}
+
+message FilterQuery {
+    repeated bytes addresses = 1;
+    string from_block = 2; // may be <nil>
+    string to_block = 3; // may be <nil>
+    
+    message Topic {
+        repeated bytes data = 1;
+    }    
+    repeated Topic topics = 4;
+}
+
+message EventLogFile {
+    FilterQuery filter = 1;
+    BlockSlice block_slice = 2;
+}
+

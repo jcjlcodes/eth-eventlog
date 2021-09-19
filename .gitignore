@@ -1,0 +1,15 @@
+# Whitelist gitignore
+
+# Ignore all in root directory...
+/*
+
+# .. except these.
+!.gitignore
+!go.mod
+!go.sum
+!README.md
+!LICENSE
+
+!events
+!examples
+!proto
