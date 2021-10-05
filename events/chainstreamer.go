@@ -163,6 +163,12 @@ func (cs *chainStreamer) process(b *BlockSlice) error {
 
 	b.DeleteBeforeBlock(cs.next)
 
+	// 3. (Optionally) Fetch transaction data.
+
+	if cs.fetchTxDetails {
+		AddTransactionData(cs.ctx, cs.client, b)
+	}
+
 	// 3. Emit events to internal eventlog and output channel.
 
 	log.Printf("emitting %d blocks from BlockSlice %d:%d\n", len(b.Blocks), b.Start, b.End)
@@ -209,7 +215,7 @@ func (cs *chainStreamer) fetch(from uint64) (*BlockSlice, error) {
 		ToBlock:   new(big.Int).SetUint64(to),
 		Addresses: cs.filter.Addresses,
 		Topics:    cs.filter.Topics,
-	}, cs.fetchTxDetails)
+	})
 	if err != nil {
 		return nil, err
 	}

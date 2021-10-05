@@ -97,7 +97,7 @@ func MatchBlocks(new, old *BlockSlice) (bool, uint64, error) {
 // GetLogs returns a batch of logs matching a query. The blocks in the
 // block are guaranteed to be sorted by increasing Number, and the events
 // therein by Index.
-func GetLogs(ctx context.Context, client *ethclient.Client, q *ethereum.FilterQuery, fetchTxDetails bool) (*BlockSlice, error) {
+func GetLogs(ctx context.Context, client *ethclient.Client, q *ethereum.FilterQuery) (*BlockSlice, error) {
 	head, err := client.BlockNumber(ctx)
 	if err != nil {
 		return nil, err
@@ -128,27 +128,6 @@ func GetLogs(ctx context.Context, client *ethclient.Client, q *ethereum.FilterQu
 		return slice, nil
 	}
 
-	transactions := make(map[string]*types.Transaction)
-	transactionSenders := make(map[string]common.Address)
-	getTransaction := func(l *types.Log) (*types.Transaction, common.Address, error) {
-		h := l.TxHash
-		key := h.Hex()
-		if tx, ok := transactions[key]; ok {
-			return tx, transactionSenders[key], nil
-		}
-		tx, _, err := client.TransactionByHash(ctx, h)
-		if err != nil {
-			return nil, common.Address{}, err
-		}
-		sender, err := client.TransactionSender(ctx, tx, l.BlockHash, l.TxIndex)
-		if err != nil {
-			sender = common.Address{}
-		}
-		transactions[key] = tx
-		transactionSenders[key] = sender
-		return tx, sender, nil
-	}
-
 	var block *Block = nil
 	for _, l := range logs {
 		if block == nil || l.BlockNumber != block.Number {
@@ -173,16 +152,6 @@ func GetLogs(ctx context.Context, client *ethclient.Client, q *ethereum.FilterQu
 			TxHash:  l.TxHash,
 			TxIndex: uint64(l.TxIndex),
 		}
-		if fetchTxDetails {
-			tx, sender, err := getTransaction(&l)
-			if err != nil {
-				return nil, err
-			}
-			e.TxData = tx.Data()
-			e.TxValue = tx.Value()
-			e.TxFrom = sender
-			e.TxGas = tx.Gas()
-		}
 		block.Events = append(block.Events, e)
 	}
 	if block != nil {
@@ -190,4 +159,42 @@ func GetLogs(ctx context.Context, client *ethclient.Client, q *ethereum.FilterQu
 	}
 
 	return slice, nil
+}
+
+func AddTransactionData(ctx context.Context, client *ethclient.Client, bs *BlockSlice) error {
+	transactions := make(map[string]*types.Transaction)
+	transactionSenders := make(map[string]common.Address)
+	getTransaction := func(e *Event) (*types.Transaction, common.Address, error) {
+		h := e.TxHash
+		key := h.Hex()
+		if tx, ok := transactions[key]; ok {
+			return tx, transactionSenders[key], nil
+		}
+		tx, _, err := client.TransactionByHash(ctx, h)
+		if err != nil {
+			return nil, common.Address{}, err
+		}
+		sender, err := client.TransactionSender(ctx, tx, e.BlockHash, uint(e.TxIndex))
+		if err != nil {
+			sender = common.Address{}
+		}
+		transactions[key] = tx
+		transactionSenders[key] = sender
+		return tx, sender, nil
+	}
+
+	for _, b := range bs.Blocks {
+		for i := range b.Events {
+			e := &b.Events[i]
+			tx, sender, err := getTransaction(e)
+			if err != nil {
+				return err
+			}
+			e.TxData = tx.Data()
+			e.TxValue = tx.Value()
+			e.TxFrom = sender
+			e.TxGas = tx.Gas()
+		}
+	}
+	return nil
 }

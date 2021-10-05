@@ -20,6 +20,8 @@ import (
 
 var nodeFlag = flag.String("node", "", "Ethereum JSON-RPC node url")
 var outputFlag = flag.String("output", "", "Output directory")
+var txFlag = flag.Bool("tx", false, "If true, fetches Tx details.")
+var startFlag = flag.Uint64("start", 10, "How many blocks behind HEAD to start")
 
 type LogTransfer struct {
 	From   common.Address
@@ -28,6 +30,11 @@ type LogTransfer struct {
 }
 
 func run() error {
+
+	log.Printf("nodeFlag: %v", *nodeFlag)
+	log.Printf("outputFlag: %v", *outputFlag)
+	log.Printf("txFlag: %v", *txFlag)
+	log.Printf("startFlag: %v", *startFlag)
 
 	ctx := context.Background()
 
@@ -47,7 +54,7 @@ func run() error {
 	}
 	log.Printf("head=%d", head)
 
-	start := head - 100
+	start := head - *startFlag
 
 	contractAddress := common.HexToAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48") // USDC ERC20
 	eventlog := events.NewInMemoryEventLog(start, ethereum.FilterQuery{
@@ -56,7 +63,7 @@ func run() error {
 	cs := events.ChainStreamer{
 		Ctx:            ctx,
 		Url:            *nodeFlag,
-		FetchTxDetails: false,
+		FetchTxDetails: *txFlag,
 	}
 	livelog := events.NewLiveEventLog(eventlog, cs)
 
@@ -78,7 +85,11 @@ func run() error {
 		case events.Append:
 			file.WriteString(fmt.Sprintf("Block %d\n", m.Block.Number))
 			for _, ev := range m.Block.Events {
-				file.WriteString(fmt.Sprintf("  %d/%d %s\n", ev.BlockNumber, ev.Index, ev.BlockHash.Hex()))
+				if *txFlag {
+					file.WriteString(fmt.Sprintf("  %d/%d (%d bytes) %s\n", ev.BlockNumber, ev.Index, len(ev.TxData), ev.TxFrom.Hex()))
+				} else {
+					file.WriteString(fmt.Sprintf("  %d/%d %s\n", ev.BlockNumber, ev.Index, ev.BlockHash.Hex()))
+				}
 			}
 
 			if m.Block.Number > lastCheckpoint+10 {
@@ -139,7 +150,7 @@ func dumpEventLog(l events.EventLog, fn string) error {
 				return err
 			}
 			for _, e := range m.Block.Events {
-				_, err := file.WriteString(fmt.Sprintf("%d/%d %s\n", e.BlockNumber, e.Index, e.BlockHash.Hex()))
+				_, err := file.WriteString(fmt.Sprintf("%d/%d %s %s\n", e.BlockNumber, e.Index, e.BlockHash.Hex(), e.TxFrom.Hex()))
 				if err != nil {
 					return err
 				}
